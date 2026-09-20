@@ -308,8 +308,25 @@ def validate_email(normalized, opts):
     ca = check_catchall(domain, hosts[0], hello, mail_from, timeout)
     ev["stages"]["catchall"] = ca
     if ca.startswith("error:"):
+        err = ca[6:]
+        # Local egress block (cloud/ISP blocks outbound port 25): no probe
+        # actually ran, but MX is valid - so LIKELY (MX-ok, unprobed) is the
+        # honest status, same evidence as SMTP-off. NOT a mailbox verdict.
+        _low = err.lower()
+        if ("errno 101" in _low or "errno 113" in _low
+                or "network is unreachable" in _low or "no route to host" in _low):
+            major = provider in ("GOOGLE_WORKSPACE", "MICROSOFT_365", "YAHOO", "ZOHO",
+                                 "ICLOUD", "PROTON")
+            conf = 82 if major else 70
+            if opts.get("strict"):
+                conf = min(conf, 75)
+            res.update(status="LIKELY", confidence=conf,
+                       reason=f"MX OK ({hosts[0]}) - SMTP probe blocked by local network "
+                              f"({err[:60]}), mailbox unprobed")
+            ev["elapsed_ms"] = int((time.time() - t0) * 1000)
+            return res
         res.update(status="UNKNOWN", confidence=45,
-                   reason=f"smtp unreachable ({ca[6:]}) - port 25 may be blocked")
+                   reason=f"smtp unreachable ({err}) - port 25 may be blocked")
         ev["elapsed_ms"] = int((time.time() - t0) * 1000)
         return res
     if ca == "yes":
