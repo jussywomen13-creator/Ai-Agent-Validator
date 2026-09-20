@@ -1,0 +1,16 @@
+# Render Blueprint - free hosting for BLACKFORGE
+# Usage: push this repo to GitHub -> Render Dashboard -> New + -> Blueprint -> pick repo.
+services:
+  - type: web
+    name: blackforge
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python backend/app.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: HOST
+        value: 0.0.0.0
+      # PORT is injected automatically by Render - do not hardcode.
