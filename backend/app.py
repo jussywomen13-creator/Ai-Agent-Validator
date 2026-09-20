@@ -207,6 +207,16 @@ def job_detail(job_id):
     job = db.get_job(job_id)
     if not job:
         return jsonify({"error": "job not found"}), 404
+    # Auto-heal: free hosts can kill the process mid-job (spin-down).
+    # A RUNNING job with no live engine is stale -> STOPPED (resumable).
+    if job["status"] == "RUNNING" and not engine.is_running(job_id):
+        if db.count_pending(job_id) > 0:
+            db.set_job_status(job_id, "STOPPED")
+            job["status"] = "STOPPED"
+            app.logger.info("job=%d auto-healed RUNNING->STOPPED (stale)", job_id)
+        else:
+            db.set_job_status(job_id, "DONE")
+            job["status"] = "DONE"
     job["running"] = engine.is_running(job_id)
     job["counts"] = db.count_by_status(job_id)
     return jsonify({"job": job})
